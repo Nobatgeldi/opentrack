@@ -1,27 +1,27 @@
 #include "plugin-api.hpp"
-
-#include <utility>
+#include <QCloseEvent>
+#include <QDebug>
 
 namespace plugin_api::detail {
 
 BaseDialog::BaseDialog() = default;
-void BaseDialog::closeEvent(QCloseEvent*)
+void BaseDialog::closeEvent(QCloseEvent* e)
 {
     if (isVisible())
-    {
-        hide();
         emit closing();
-    }
+    e->accept();
 }
 
 void BaseDialog::done(int)
 {
     if (isVisible())
-    {
-        hide();
         close();
-    }
 }
+
+bool BaseDialog::embeddable() noexcept { return false; }
+void BaseDialog::save() {}
+void BaseDialog::reload() {}
+void BaseDialog::set_buttons_visible(bool x) {}
 
 } // ns plugin_api::detail
 
@@ -36,10 +36,14 @@ IFilter::IFilter() = default;
 IFilter::~IFilter() = default;
 IFilterDialog::IFilterDialog() = default;
 IFilterDialog::~IFilterDialog() = default;
+void IFilterDialog::register_filter(IFilter* filter) {}
+void IFilterDialog::unregister_filter() {}
 IProtocol::IProtocol() = default;
 IProtocol::~IProtocol() = default;
 IProtocolDialog::IProtocolDialog() = default;
 IProtocolDialog::~IProtocolDialog() = default;
+void IProtocolDialog::register_protocol(IProtocol* protocol){}
+void IProtocolDialog::unregister_protocol() {}
 ITracker::ITracker() = default;
 ITracker::~ITracker() = default;
 bool ITracker::center() { return false; }
@@ -47,14 +51,11 @@ ITrackerDialog::ITrackerDialog() = default;
 ITrackerDialog::~ITrackerDialog() = default;
 void ITrackerDialog::register_tracker(ITracker*) {}
 void ITrackerDialog::unregister_tracker() {}
-IExtension::~IExtension() = default;
-IExtensionDialog::~IExtensionDialog() = default;
 
 bool module_status::is_ok() const
 {
     return error.isNull();
 }
-
 module_status_mixin::~module_status_mixin() = default;
 module_status::module_status(const QString& error) : error(error) {}
 module_status::module_status() = default;

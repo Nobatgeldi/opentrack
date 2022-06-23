@@ -82,8 +82,8 @@ module_status aruco_tracker::start_tracker(QFrame* videoframe)
     videoWidget = std::make_unique<cv_video_widget>(videoframe);
     layout = std::make_unique<QHBoxLayout>();
     layout->setContentsMargins(0, 0, 0, 0);
-    layout->addWidget(videoWidget.get());
-    videoframe->setLayout(layout.get());
+    layout->addWidget(&*videoWidget);
+    videoframe->setLayout(&*layout);
     videoWidget->show();
     start();
 
@@ -178,6 +178,8 @@ bool aruco_tracker::open_camera()
     }
     if (fps)
         args.fps = fps;
+
+    args.use_mjpeg = s.use_mjpeg;
 
     if (!camera->start(args))
     {
@@ -526,6 +528,7 @@ aruco_dialog::aruco_dialog() :
     tie_setting(s.headpos_x, ui.cx);
     tie_setting(s.headpos_y, ui.cy);
     tie_setting(s.headpos_z, ui.cz);
+    tie_setting(s.use_mjpeg, ui.use_mjpeg);
 
     connect(ui.buttonBox, SIGNAL(accepted()), this, SLOT(doOK()));
     connect(ui.buttonBox, SIGNAL(rejected()), this, SLOT(doCancel()));

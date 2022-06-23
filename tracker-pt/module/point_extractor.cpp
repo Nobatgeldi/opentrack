@@ -98,7 +98,6 @@ void PointExtractor::ensure_buffers(const cv::Mat& frame)
 
     frame_gray.create(H, W);
     frame_bin.create(H, W);
-    frame_gray_unmasked.create(H, W);
 }
 
 void PointExtractor::extract_single_channel(const cv::Mat& orig_frame, int idx, cv::Mat1b& dest)
@@ -175,18 +174,14 @@ void PointExtractor::color_to_grayscale(const cv::Mat& frame, cv::Mat1b& output)
         filter_single_channel(frame, 0.5, -1, 0.5, output);
         break;
     }
-    case pt_color_average:
-    {
-        const int W = frame.cols, H = frame.rows, sz = W*H;
-        cv::reduce(frame.reshape(1, sz),
-                   output.reshape(1, sz),
-                   1, cv::REDUCE_AVG);
-        break;
-    }
+    case pt_color_hardware:
+        eval_once(qDebug() << "camera driver doesn't support grayscale");
+        goto do_grayscale;
     default:
         eval_once(qDebug() << "wrong pt_color_type enum value" << int(s.blob_color));
     [[fallthrough]];
-    case pt_color_natural:
+    case pt_color_bt709:
+do_grayscale:
         cv::cvtColor(frame, output, cv::COLOR_BGR2GRAY);
         break;
     }
@@ -273,6 +268,30 @@ static void draw_blobs(cv::Mat& preview_frame, const blob* blobs, unsigned nblob
     }
 }
 
+static vec2 meanshift_initial_guess(const cv::Rect rect, cv::Mat& frame_roi)
+{
+    vec2 ret = {rect.width/(f)2, rect.height/(f)2};
+
+    // compute center initial guess
+    double ynorm = 0, xnorm = 0, y = 0, x = 0;
+    for (int j = 0; j < rect.height; j++)
+    {
+        const unsigned char* __restrict ptr = frame_roi.ptr<unsigned char>(j);
+        for (int i = 0; i < rect.width; i++)
+        {
+            double val = ptr[i] * 1./255;
+            x += i * val;
+            y += j * val;
+            xnorm += val;
+            ynorm += val;
+        }
+    }
+    constexpr double eps = 1e-4;
+    if (xnorm > eps && ynorm > eps)
+        ret = { (f)(x / xnorm), (f)(y / ynorm) };
+    return ret;
+}
+
 void PointExtractor::extract_points(const pt_frame& frame_,
                                     pt_preview& preview_frame_,
                                     bool preview_visible,
@@ -281,15 +300,14 @@ void PointExtractor::extract_points(const pt_frame& frame_,
     const cv::Mat& frame = frame_.as_const<Frame>()->mat;
 
     ensure_buffers(frame);
-    color_to_grayscale(frame, frame_gray_unmasked);
+    color_to_grayscale(frame, frame_gray);
 
 #if defined PREVIEW
     cv::imshow("capture", frame_gray);
     cv::waitKey(1);
 #endif
 
-    threshold_image(frame_gray_unmasked, frame_bin);
-    frame_gray_unmasked.copyTo(frame_gray, frame_bin);
+    threshold_image(frame_gray, frame_bin);
 
     const f region_size_min = (f)s.min_point_size;
     const f region_size_max = (f)s.max_point_size;
@@ -337,7 +355,7 @@ void PointExtractor::extract_points(const pt_frame& frame_,
                 }
             }
 
-            const f radius = (f)(std::sqrt(cnt) / std::sqrt(pi));
+            const f radius = std::sqrt((f)cnt) / std::sqrt(pi);
             if (radius > region_size_max || radius < region_size_min)
                 continue;
 
@@ -367,21 +385,14 @@ end:
     for (idx = 0; idx < sz; ++idx)
     {
         blob& b = blobs[idx];
-        cv::Rect rect = b.rect;
-
-        rect.x -= rect.width / 2;
-        rect.y -= rect.height / 2;
-        rect.width *= 2;
-        rect.height *= 2;
-        rect &= cv::Rect(0, 0, W, H);  // crop at frame boundaries
-
+        cv::Rect rect = b.rect & cv::Rect(0, 0, W, H); // crop at frame boundaries
         cv::Mat frame_roi = frame_gray(rect);
 
         // smaller values mean more changes. 1 makes too many changes while 1.5 makes about .1
         static constexpr f radius_c = f(1.75);
 
         const f kernel_radius = b.radius * radius_c;
-        vec2 pos(rect.width/f(2), rect.height/f(2)); // position relative to ROI.
+        vec2 pos = meanshift_initial_guess(rect, frame_roi); // position relative to ROI.
 
         for (int iter = 0; iter < 10; ++iter)
         {

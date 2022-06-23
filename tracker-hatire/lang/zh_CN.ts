@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!DOCTYPE TS>
-<TS version="2.1">
+<TS version="2.1" language="zh_CN">
 <context>
     <name>UIHATControls</name>
     <message>
@@ -267,6 +267,10 @@ p, li { white-space: pre-wrap; }
     </message>
     <message>
         <source>Enable logging to diagnostic file</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>DTR</source>
         <translation type="unfinished"></translation>
     </message>
 </context>

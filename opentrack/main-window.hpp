@@ -10,7 +10,7 @@
 
 #include "api/plugin-support.hpp"
 #include "gui/mapping-dialog.hpp"
-#include "gui/settings.hpp"
+#include "gui/options-dialog.hpp"
 #include "gui/process_detector.h"
 #include "logic/main-settings.hpp"
 #include "logic/pipeline.hpp"
@@ -20,21 +20,16 @@
 #include "options/options.hpp"
 #include "compat/qt-signal.hpp"
 
-#include <QApplication>
 #include <QMainWindow>
 #include <QKeySequence>
 #include <QShortcut>
-#include <QPixmap>
 #include <QTimer>
 #include <QSystemTrayIcon>
 #include <QString>
 #include <QMenu>
 #include <QAction>
-#include <QEvent>
-#include <QCloseEvent>
 #include <QList>
 
-#include <tuple>
 #include <memory>
 
 #include "ui_main-window.h"
@@ -78,11 +73,12 @@ class main_window final : public QMainWindow, private State
 
     bool exiting_already { false };
 
-    qt_sig::nullary start_tracker { this, &main_window::start_tracker_, Qt::QueuedConnection };
-    qt_sig::nullary stop_tracker { this, &main_window::stop_tracker_, Qt::QueuedConnection };
-    qt_sig::nullary toggle_tracker { this, &main_window::toggle_tracker_, Qt::QueuedConnection };
-    qt_sig::nullary restart_tracker { this, &main_window::restart_tracker_, Qt::QueuedConnection };
+    qt_signal<void> start_tracker { this, &main_window::start_tracker_, Qt::QueuedConnection };
+    qt_signal<void> stop_tracker { this, &main_window::stop_tracker_, Qt::QueuedConnection };
+    qt_signal<void> toggle_tracker { this, &main_window::toggle_tracker_, Qt::QueuedConnection };
+    qt_signal<void> restart_tracker { this, &main_window::restart_tracker_, Qt::QueuedConnection };
 
+public:
     void init_dylibs();
     void init_tray_menu();
     void init_profiles();
@@ -103,11 +99,14 @@ class main_window final : public QMainWindow, private State
     void closeEvent(QCloseEvent *event) override;
     bool event(QEvent *event) override;
 
-    void show_tracker_settings();
-    void show_proto_settings();
-    void show_filter_settings();
+    void show_tracker_settings_(bool show);
+    void show_proto_settings_(bool show);
+    void show_filter_settings_(bool show);
+    void show_tracker_settings() { show_tracker_settings_(true); }
+    void show_proto_settings() { show_proto_settings_(true); }
+    void show_filter_settings() { show_filter_settings_(true); }
 
-    void show_options_dialog();
+    void show_options_dialog(bool show);
     void show_mapping_window();
 
     void show_pose();
@@ -119,12 +118,14 @@ class main_window final : public QMainWindow, private State
     void restart_tracker_();
     void toggle_tracker_();
 
+    [[nodiscard]] bool create_profile_from_preset(const QString& name);
     void set_profile(const QString& new_name, bool migrate = true);
     void set_profile_in_registry(const QString& profile);
     void refresh_profile_list();
     void die_on_profile_not_writable();
     void maybe_start_profile_from_executable();
     [[nodiscard]] static bool profile_name_from_dialog(QString& ret);
+    void copy_presets();
 
     void create_empty_profile();
     void create_copied_profile();
@@ -136,6 +137,7 @@ class main_window final : public QMainWindow, private State
     bool start_in_tray();
 
     void save_modules();
+    bool module_tabs_enabled() const;
 
     void exit(int status = EXIT_SUCCESS);
 

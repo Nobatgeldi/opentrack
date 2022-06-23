@@ -10,11 +10,12 @@ void point_filter::reset()
     t = std::nullopt;
 }
 
-const PointOrder& point_filter::operator()(const PointOrder& input)
+const PointOrder& point_filter::operator()(const PointOrder& input, f deadzone_amount)
 {
     using std::fmod;
     using std::sqrt;
     using std::pow;
+    using std::clamp;
 
     if (!s.enable_point_filter)
     {
@@ -39,12 +40,13 @@ const PointOrder& point_filter::operator()(const PointOrder& input)
         return A * pow((f)10, (f)-log10_pos) * rest;
     );
 
-    f dist = 0;
+    f dist = 0, dz = deadzone_amount * (f)s.point_filter_deadzone / 800; // sqrt(640^2 + 480^2)
 
     for (unsigned i = 0; i < 3; i++)
     {
         vec2 tmp = input[i] - state_[i];
         f x = sqrt(tmp.dot(tmp));
+        x = std::max((f)0, x - dz);
         dist = std::max(dist, x);
     }
 
@@ -58,7 +60,7 @@ const PointOrder& point_filter::operator()(const PointOrder& input)
 
     for (unsigned i = 0; i < 3; i++)
     {
-        f x = std::clamp(delta, (f)0, limit);
+        f x = clamp(delta, (f)0, limit);
         state_[i] += x*(input[i] - state_[i]);
     }
 

@@ -148,7 +148,7 @@ void spline::update_interp_data() const
 {
     points_t list = points;
     ensure_valid(list);
-    const int sz = list.size();
+    int sz = list.size();
 
     if (list.isEmpty())
         list.prepend({ max_input(), max_output() });
@@ -183,7 +183,16 @@ void spline::update_interp_data() const
     else
     {
         if (list[0].x() > 1e-6)
-            list.push_front({});
+        {
+            double zero_pos = 0;
+            while (list.size() > 1 && list[0].y() <= 1e-6)
+            {
+                zero_pos = list[0].x();
+                list.pop_front();
+            }
+            list.push_front({zero_pos, 0});
+            sz = list.size();
+        }
 
         // now this is hella expensive due to `c_interp'
         for (int i = 0; i < sz; i++)
@@ -382,11 +391,11 @@ void spline::set_bundle(bundle b, const QString& axis_name, Axis axis)
         S = s;
 
         conn_points = QObject::connect(&s->points, value_::value_changed<QList<QPointF>>(),
-                                       ctx.get(), [this] { invalidate_settings(); }, Qt::DirectConnection);
+                                       &*ctx, [this] { invalidate_settings(); }, Qt::DirectConnection);
         conn_maxx   = QObject::connect(&s->opts.clamp_x_, value_::value_changed<int>(),
-                                       ctx.get(), [this](double) { invalidate_settings(); }, Qt::DirectConnection);
+                                       &*ctx, [this](double) { invalidate_settings(); }, Qt::DirectConnection);
         conn_maxy   = QObject::connect(&s->opts.clamp_y_, value_::value_changed<int>(),
-                                       ctx.get(), [this](double) { invalidate_settings(); }, Qt::DirectConnection);
+                                       &*ctx, [this](double) { invalidate_settings(); }, Qt::DirectConnection);
     }
 
     emit S->recomputed();
