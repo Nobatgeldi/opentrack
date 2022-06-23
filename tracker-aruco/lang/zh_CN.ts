@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!DOCTYPE TS>
-<TS version="2.1">
+<TS version="2.1" language="zh_CN">
 <context>
     <name>Form</name>
     <message>
@@ -61,6 +61,10 @@
     </message>
     <message>
         <source>1280x720</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>MJPEG</source>
         <translation type="unfinished"></translation>
     </message>
 </context>

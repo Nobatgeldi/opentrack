@@ -92,7 +92,11 @@ std::unique_ptr<camera> ps3eye_camera_::make_camera(const QString& name)
 
 static bool show_dialog_()
 {
-    (new dialog)->show();
+    auto& dlg = *new dialog;
+    dlg.setWindowFlag(Qt::MSWindowsFixedSizeDialogHint);
+    dlg.setAttribute(Qt::WA_DeleteOnClose);
+    dlg.adjustSize(); dlg.setFixedSize(dlg.size());
+    dlg.show();
     return true;
 }
 

@@ -15,7 +15,14 @@
 #include <QDebug>
 #include <QMutexLocker>
 
-#include <windows.h>
+#include <dinput.h>
+
+static void destroy(IDirectInputDevice8A*& dev)
+{
+    if (dev)
+        dev->Release();
+    dev = nullptr;
+}
 
 Key::Key() = default;
 
@@ -35,16 +42,13 @@ KeybindingWorker::~KeybindingWorker()
     requestInterruption();
     wait();
 
-    if (dinkeyboard)
-    {
-        dinkeyboard->Unacquire();
-        dinkeyboard->Release();
-    }
+    destroy(dinkeyboard);
+    destroy(dinmouse);
 }
 
-bool KeybindingWorker::init()
+bool KeybindingWorker::init_(IDirectInputDevice8A*& dev, const char* name, const GUID& guid, const DIDATAFORMAT& fmt)
 {
-    if (dinkeyboard)
+    if (dev)
         return true;
 
     if (!din)
@@ -53,23 +57,38 @@ bool KeybindingWorker::init()
         goto fail;
     }
 
-    if (din->CreateDevice(GUID_SysKeyboard, &dinkeyboard, nullptr) != DI_OK)
+    if (auto hr = din->CreateDevice(guid, &dev, nullptr); hr != DI_OK)
     {
-        qDebug() << "dinput: create keyboard failed" << GetLastError();
+        qDebug() << "dinput: create" << name << "failed" << (void*)hr;
         goto fail;
     }
 
-    if (dinkeyboard->SetDataFormat(&c_dfDIKeyboard) != DI_OK)
+    if (auto hr = dev->SetDataFormat(&fmt); hr != DI_OK)
     {
-        qDebug() << "dinput: keyboard SetDataFormat" << GetLastError();
+        qDebug() << "dinput:" << name << "SetDataFormat" << (void*)hr;
         goto fail;
     }
 
-    if (dinkeyboard->SetCooperativeLevel((HWND) fake_main_window.winId(), DISCL_NONEXCLUSIVE | DISCL_BACKGROUND) != DI_OK)
+    if (auto hr = dev->SetCooperativeLevel((HWND) fake_main_window.winId(), DISCL_NONEXCLUSIVE | DISCL_BACKGROUND);
+        hr != DI_OK)
     {
-        qDebug() << "dinput: keyboard SetCooperativeLevel" << GetLastError();
+        qDebug() << "dinput:" << name << "SetCooperativeLevel" << (void*)hr;
         goto fail;
     }
+
+    return true;
+fail:
+    destroy(dev);
+    return false;
+}
+
+bool KeybindingWorker::init()
+{
+    bool ret = init_(dinkeyboard, "keyboard", GUID_SysKeyboard, c_dfDIKeyboard) &&
+               init_(dinmouse, "mouse", GUID_SysMouse, c_dfDIMouse2);
+
+    if (!ret)
+        goto fail;
 
     {
         DIPROPDWORD dipdw;
@@ -79,9 +98,9 @@ bool KeybindingWorker::init()
         dipdw.diph.dwObj = 0;
         dipdw.diph.dwSize = sizeof(dipdw);
 
-        if (dinkeyboard->SetProperty(DIPROP_BUFFERSIZE, &dipdw.diph) != DI_OK)
+        if (auto hr = dinkeyboard->SetProperty(DIPROP_BUFFERSIZE, &dipdw.diph); hr != DI_OK)
         {
-            qDebug() << "dinput: DIPROP_BUFFERSIZE";
+            qDebug() << "dinput: keyboard DIPROP_BUFFERSIZE" << (void*)hr;
             goto fail;
         }
     }
@@ -89,11 +108,8 @@ bool KeybindingWorker::init()
     return true;
 
 fail:
-    if (dinkeyboard)
-    {
-        dinkeyboard->Release();
-        dinkeyboard = nullptr;
-    }
+    destroy(dinkeyboard);
+    destroy(dinmouse);
     return false;
 }
 
@@ -125,6 +141,7 @@ void KeybindingWorker::run()
                 bool ok = true;
 
                 ok &= run_keyboard_nolock();
+                ok &= run_mouse_nolock();
                 ok &= run_joystick_nolock();
 
                 if (!ok)
@@ -134,6 +151,38 @@ void KeybindingWorker::run()
 
         Sleep(25);
     }
+}
+
+bool KeybindingWorker::run_mouse_nolock()
+{
+    DIMOUSESTATE2 state;
+
+    if (!di_t::poll_device(dinmouse))
+        eval_once(qDebug() << "dinput: mouse poll failed");
+
+    if (auto hr = dinmouse->GetDeviceState(sizeof(state), &state); hr != DI_OK)
+    {
+        eval_once(qDebug() << "dinput: mouse GetDeviceState failed" << (void*) hr << GetLastError);
+        return false;
+    }
+
+    Key k;
+    k.guid = QStringLiteral("mouse");
+
+    for (int i = first_mouse_button; i < num_mouse_buttons; i++)
+    {
+        const bool new_state = state.rgbButtons[i] & 0x80;
+        k.held = new_state;
+        k.keycode = i;
+        bool& old_state = mouse_state[i - first_mouse_button];
+        if (old_state != new_state)
+        {
+            for (auto& r : receivers)
+                (*r)(k);
+        }
+        old_state = new_state;
+    }
+    return true;
 }
 
 bool KeybindingWorker::run_keyboard_nolock()
@@ -153,6 +202,8 @@ bool KeybindingWorker::run_keyboard_nolock()
     if (!di_t::poll_device(dinkeyboard))
         eval_once(qDebug() << "dinput: keyboard poll failed");
 
+    DIDEVICEOBJECTDATA keyboard_states[num_keyboard_states];
+
     DWORD sz = num_keyboard_states;
     HRESULT hr = dinkeyboard->GetDeviceData(sizeof(*keyboard_states), keyboard_states, &sz, 0);
 
@@ -164,8 +215,12 @@ bool KeybindingWorker::run_keyboard_nolock()
 
     for (unsigned k = 0; k < sz; k++)
     {
-        const unsigned idx = keyboard_states[k].dwOfs & 0xff; // defensive programming
+        const int idx = keyboard_states[k].dwOfs & 0xff; // defensive programming
         const bool held = !!(keyboard_states[k].dwData & 0x80);
+
+        if (held == keystate[idx])
+            continue;
+        keystate[idx] = held;
 
         switch (idx)
         {
@@ -192,8 +247,6 @@ bool KeybindingWorker::run_keyboard_nolock()
         }
             break;
         }
-
-        keystate[idx] = held;
     }
 
     return true;
@@ -225,7 +278,7 @@ KeybindingWorker::fun* KeybindingWorker::add_receiver(fun& receiver)
 {
     QMutexLocker l(&mtx);
     receivers.push_back(std::make_unique<fun>(receiver));
-    fun* f = receivers[receivers.size() - 1].get();
+    fun* f = &*receivers[receivers.size() - 1];
     //qDebug() << "add receiver" << (long) f;
     joy_ctx.refresh();
     return f;
@@ -241,7 +294,7 @@ void KeybindingWorker::remove_receiver(KeybindingWorker::fun* pos)
     for (int i = s(receivers.size()) - 1; i >= 0; i--)
     {
         using u = unsigned;
-        if (receivers[u(i)].get() == pos)
+        if (&*receivers[u(i)] == pos)
         {
             ok = true;
             //qDebug() << "remove receiver" << (long) pos;

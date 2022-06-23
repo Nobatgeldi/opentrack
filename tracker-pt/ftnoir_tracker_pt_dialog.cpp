@@ -92,8 +92,8 @@ TrackerDialog_PT::TrackerDialog_PT(const QString& module_name) :
     poll_tracker_info_impl();
 
     constexpr pt_color_type color_types[] = {
-        pt_color_average,
-        pt_color_natural,
+        pt_color_bt709,
+        pt_color_hardware,
         pt_color_red_only,
         pt_color_green_only,
         pt_color_blue_only,
@@ -115,9 +115,7 @@ TrackerDialog_PT::TrackerDialog_PT(const QString& module_name) :
     });
 
     // refresh threshold display on auto-threshold checkbox state change
-    tie_setting(s.auto_threshold,
-                this,
-                [this](bool) { s.threshold_slider.notify(); });
+    tie_setting(s.auto_threshold, this, [this](bool) { s.threshold_slider.notify_(); });
 
     tie_setting(s.enable_point_filter, ui.enable_point_filter);
     tie_setting(s.point_filter_coefficient, ui.point_filter_slider);
@@ -128,6 +126,12 @@ TrackerDialog_PT::TrackerDialog_PT(const QString& module_name) :
         [this] { ui.point_filter_limit_label->setValue(*s.point_filter_limit); }, Qt::QueuedConnection);
     ui.point_filter_label->setValue(*s.point_filter_coefficient);
     ui.point_filter_limit_label->setValue(*s.point_filter_limit);
+
+    tie_setting(s.point_filter_deadzone, ui.point_filter_deadzone_slider);
+    ui.point_filter_deadzone_label->setValue(*s.point_filter_deadzone);
+
+    connect(&s.point_filter_deadzone, value_::value_changed<slider_value>(), ui.point_filter_deadzone_label,
+        [this] { ui.point_filter_deadzone_label->setValue(*s.point_filter_deadzone); }, Qt::QueuedConnection);
 }
 
 QString TrackerDialog_PT::threshold_display_text(int threshold_value)
@@ -287,6 +291,16 @@ void TrackerDialog_PT::unregister_tracker()
     ui.tcalib_button->setEnabled(false);
     poll_tracker_info_impl();
     timer.stop();
+}
+
+void TrackerDialog_PT::set_buttons_visible(bool x)
+{
+    ui.buttonBox->setVisible(x);
+}
+
+void TrackerDialog_PT::reload()
+{
+    s.b->reload();
 }
 
 } // ns pt_impl

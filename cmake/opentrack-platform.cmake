@@ -38,8 +38,8 @@ set(opentrack_maintainer-mode FALSE CACHE INTERNAL "Select if developing core co
 
 set(CMAKE_TRY_COMPILE_TARGET_TYPE STATIC_LIBRARY)
 
-set(CMAKE_CXX_STANDARD 17)
-set(CMAKE_CXX_STANDARD_DEFAULT 17)
+set(CMAKE_CXX_STANDARD 20)
+set(CMAKE_CXX_STANDARD_DEFAULT 20)
 set(CMAKE_CXX_STANDARD_REQUIRED TRUE)
 set(CMAKE_CXX_EXTENSIONS FALSE)
 
@@ -137,6 +137,15 @@ if(MSVC)
     add_link_options(-ignore:4020)
     add_link_options(-ignore:4217) # debug build
 
+    if(MSVC_VERSION GREATER_EQUAL 1913)
+        if(NOT MSVC_VERSION GREATER_EQUAL 1929)
+            add_compile_options(-experimental:external)
+        endif()
+        add_compile_options(-external:W0 -external:anglebrackets)
+    endif()
+    add_compile_options(-Zc:preprocessor)
+    #add_compile_options(-Zc:inline)
+
     #C4457: declaration of 'id' hides function parameter
     #C4456: declaration of 'i' hides previous local declaration
     #C4263 - member function does not override any base class virtual member function
@@ -145,8 +154,9 @@ if(MSVC)
     #C4266 - no override available for virtual member function from base type, function is hidden
     #C4928 - illegal copy-initialization, more than one user-defined conversion has been implicitly applied
     #C4200: nonstandard extension used: zero-sized array in struct/union
+    #C4459: declaration of 'eps' hides global declaration
 
-    set(warns-disable 4530 4577 4789 4244 4702 4530 4244 4127 4458 4456 4251 4100 4702 4457 4200)
+    set(warns-disable 4530 4577 4789 4244 4702 4530 4244 4127 4458 4456 4251 4100 4702 4457 4200 4459)
 
     foreach(i ${warns-disable})
         add_compile_options(-wd${i})
