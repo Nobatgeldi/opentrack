@@ -9,6 +9,22 @@
 #include <QString>
 
 namespace options::detail {
+template<typename t>
+using cv_qualified =
+    std::conditional_t<std::is_fundamental_v<std::remove_cvref_t<t>>,
+                       std::remove_cvref_t<t>,
+                       std::add_lvalue_reference_t<std::add_const_t<std::remove_cvref_t<t>>>>;
+
+template<typename t, typename = void>
+struct maybe_enum_type {
+    using type = t;
+};
+template<typename t>
+struct maybe_enum_type<t, std::enable_if_t<std::is_enum_v<t>>> {
+    using type = int;
+};
+
+template<typename t> using maybe_enum_type_t = typename maybe_enum_type<t>::type;
 
 template<typename t, typename u = t, typename Enable = void>
 struct default_value_traits
