@@ -46,6 +46,7 @@ clang-analyzer-deadcode.DeadStores,
 -hicpp-explicit-conversions,
 -hicpp-function-size,
 -hicpp-member-init,
+-hicpp-move-const-arg,
 -hicpp-named-parameter,
 -hicpp-new-delete-operators,
 -hicpp-no-array-decay,
@@ -83,6 +84,7 @@ readability-function-cognitive-complexity,
 -readability-simplify-boolean-expr,
 -readability-static-accessed-through-instance,
 -readability-uppercase-literal-suffix,
+-readability-use-anyofallof,
 '
 
 AnalyzeTemporaryDtors: true
