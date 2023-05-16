@@ -67,6 +67,10 @@ main_window::main_window() : State(OPENTRACK_BASE_PATH + OPENTRACK_LIBRARY_PATH)
     connect(&*s.b, &options::bundle_::saving, this, &main_window::register_shortcuts);
 
     ui.btnStartTracker->setFocus();
+#ifdef UI_NO_VIDEO_FEED
+    fake_video_frame.resize(640, 480);
+    fake_video_frame_parent.setVisible(false);
+#endif
 }
 
 void main_window::init_shortcuts()
@@ -303,7 +307,11 @@ bool main_window::profile_name_from_dialog(QString& ret)
 main_window::~main_window()
 {
     // stupid ps3 eye has LED issues
+#ifndef UI_NO_VIDEO_FEED
     if (work && ui.video_frame->layout())
+#else
+    if (work)
+#endif
     {
         hide();
         stop_tracker_();
@@ -411,6 +419,7 @@ void main_window::update_button_state(bool running, bool inertialp)
     ui.iconcomboTrackerSource->setEnabled(not_running);
 #endif
     ui.profile_button->setEnabled(not_running);
+#ifndef UI_NO_VIDEO_FEED
     ui.video_frame_label->setVisible(not_running || inertialp);
     if(not_running)
     {
@@ -419,6 +428,7 @@ void main_window::update_button_state(bool running, bool inertialp)
     else {
         ui.video_frame_label->setPixmap(QPixmap(":/images/no-feed.png"));
     }
+#endif
 }
 
 void main_window::start_tracker_()
@@ -426,7 +436,12 @@ void main_window::start_tracker_()
     if (work)
         return;
 
-    work = std::make_shared<Work>(pose, ui.video_frame, current_tracker(), current_protocol(), current_filter());
+#ifndef UI_NO_VIDEO_FEED
+    auto* frame = ui.video_frame;
+#else
+    auto* frame = &fake_video_frame;
+#endif
+    work = std::make_shared<Work>(pose, frame, current_tracker(), current_protocol(), current_filter());
 
     if (!work->is_ok())
     {
@@ -456,11 +471,11 @@ void main_window::start_tracker_()
             options_widget->register_filter(&*work->libs.pFilter);
     }
 
-    pose_update_timer.start(15);
+    pose_update_timer.start(1000/30);
 
     // NB check valid since SelectedLibraries ctor called
     // trackers take care of layout state updates
-    const bool is_inertial = ui.video_frame->layout() == nullptr;
+    const bool is_inertial = frame->layout() == nullptr;
     update_button_state(true, is_inertial);
 
     ui.btnStopTracker->setFocus();
@@ -668,7 +683,6 @@ static void show_module_settings(std::shared_ptr<Instance> instance,
                                  void(Dialog::*register_fun)(Instance*),
                                  void(options_dialog::*switch_tab_fun)())
 {
-    using BaseDialog = plugin_api::detail::BaseDialog;
     if (!lib || !lib->Dialog)
         return;
 
