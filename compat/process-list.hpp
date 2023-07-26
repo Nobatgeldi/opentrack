@@ -131,6 +131,46 @@ static QStringList get_all_executable_names()
 
 #elif defined __linux__
 
+#include <cerrno>
+
+#ifdef OTR_HAS_LIBPROC2
+#include <libproc2/pids.h>
+template<typename = void>
+QStringList get_all_executable_names()
+{
+    QStringList ret;
+    enum pids_item items[] = { PIDS_ID_PID, PIDS_CMD, PIDS_CMDLINE_V };
+
+    enum rel_items { rel_pid, rel_cmd, rel_cmdline };
+    struct pids_info *info = NULL;
+    struct pids_stack *stack;
+    QString tmp; tmp.reserve(64);
+
+    procps_pids_new(&info, items, 3);
+
+    while ((stack = procps_pids_get(info, PIDS_FETCH_TASKS_ONLY)))
+    {
+        char  **p_cmdline = PIDS_VAL(rel_cmdline, strv,  stack, info);
+
+        // note, wine sets argv[0] so no parsing like in OSX case
+        if (p_cmdline && p_cmdline[0] && p_cmdline[0][0] &&
+            !(p_cmdline[0][0] == '-' && !p_cmdline[0][1]))
+        {
+            tmp = QString{p_cmdline[0]};
+            const int idx = std::max(tmp.lastIndexOf('\\'), tmp.lastIndexOf('/'));
+            if (idx != -1)
+                tmp = tmp.mid(idx+1);
+            //qDebug() << "procps" << tmp;
+            ret.append(tmp);
+        }
+    }
+    //qDebug() << "-- procps end";
+
+    procps_pids_unref(&info);
+
+    return ret;
+}
+#else
 #include <proc/readproc.h>
 #include <cerrno>
 
@@ -160,6 +200,7 @@ QStringList get_all_executable_names()
     free(procs);
     return ret;
 }
+#endif
 
 #else
 template<typename = void>

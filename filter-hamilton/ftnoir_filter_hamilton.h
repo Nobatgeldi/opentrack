@@ -13,7 +13,7 @@
 #include <QMutex>
 #include "options/options.hpp"
 //#include "compat/timer.hpp"
-#include "hamilton-tools.h"
+#include "compat/hamilton-tools.h"
 
 using namespace options;
 
@@ -43,7 +43,7 @@ public:
     module_status initialize() override { return status_ok(); }
 private:
     tQuat   quat_last;
-		tVector pos_last;
+    tVector pos_last;
     settings s;
     bool first_run = true;
 };
